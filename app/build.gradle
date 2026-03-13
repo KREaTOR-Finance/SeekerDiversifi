@@ -1,0 +1,114 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'kotlin-kapt'
+    id 'dagger.hilt.android.plugin'
+}
+
+android {
+    namespace 'com.diversify.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.diversify.app"
+        minSdk 29
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+        // buildConfigField "String", "BACKEND_URL", '"https://your-backend.vercel.app/api"' // backend offline, kept for future use
+        buildConfigField "String", "SOLANA_RPC_URL", '"https://api.mainnet-beta.solana.com"' // mainnet RPC endpoint
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        vectorDrawables {
+            useSupportLibrary true
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    // custom APK name
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            def newName = "SeekerDIVERSIFI-${variant.versionName}.apk"
+            outputFileName = newName
+        }
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+    
+    buildFeatures {
+        compose true
+    }
+    
+    composeOptions {
+        kotlinCompilerExtensionVersion '1.5.3'
+    }
+    
+    packagingOptions {
+        resources {
+            excludes += '/META-INF/{AL2.0,LGPL2.1}'
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.7.0'
+    implementation 'androidx.activity:activity-compose:1.8.0'
+    
+    // Compose
+    implementation platform('androidx.compose:compose-bom:2023.08.00')
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    implementation 'androidx.compose.material3:material3'
+    
+    // Room Database
+    implementation 'androidx.room:room-runtime:2.6.0'
+    implementation 'androidx.room:room-ktx:2.6.0'
+    kapt 'androidx.room:room-compiler:2.6.0'
+    
+    // Hilt DI
+    implementation 'com.google.dagger:hilt-android:2.48'
+    kapt 'com.google.dagger:hilt-compiler:2.48'
+    implementation 'androidx.hilt:hilt-navigation-compose:1.1.0'
+    
+    // Security
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+    
+    // Solana Mobile Wallet Adapter
+    implementation 'com.solanamobile:mobile-wallet-adapter-clientlib-ktx:2.1.0'
+    // OkHttp used for network calls (e.g. mainnet RPC); keep if you still need internet access
+    implementation 'com.squareup.okhttp3:okhttp:4.10.0'
+    // Solana client for transaction/keys
+    implementation 'com.solana:solana:1.5.0'
+    // needed for cryptography during key derivation
+    implementation 'org.bouncycastle:bcprov-jdk15on:1.70'
+    implementation 'org.json:json:20230227' // simple JSON parsing
+    
+    // Testing
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    androidTestImplementation platform('androidx.compose:compose-bom:2023.08.00')
+    androidTestImplementation 'androidx.compose.ui:ui-test-junit4'
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+    debugImplementation 'androidx.compose.ui:ui-test-manifest'
+}
+
+kapt {
+    correctErrorTypes true
+}
