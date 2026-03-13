@@ -1,22 +1,20 @@
 package com.diversify.presentation.screen
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,20 +28,19 @@ import com.diversify.presentation.theme.MatrixGreen
 import com.diversify.presentation.theme.MatrixMagenta
 import com.diversify.presentation.viewmodel.SessionViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionConfigScreen(
     defaultConfig: SessionViewModel.SessionConfig,
-    onStartSession: (SessionViewModel.SessionConfig) -> Unit,
-    onViewLeaderboard: () -> Unit
+    allowlistTokens: List<String>,
+    onStartSession: (SessionViewModel.SessionConfig) -> Unit
 ) {
-    var transactionCount by remember { mutableStateOf(defaultConfig.transactionCount) }
-    var bundlerRatio by remember { mutableStateOf(defaultConfig.bundlerRatio) }
-    var curatedTokens by remember { mutableStateOf(defaultConfig.curatedTokens) }
+    var totalTransactions by remember { mutableStateOf(defaultConfig.totalTransactions) }
+    var sessionAmountText by remember { mutableStateOf(defaultConfig.sessionAmount.toString()) }
     var fundingAsset by remember { mutableStateOf(defaultConfig.fundingAsset) }
 
     var expanded by remember { mutableStateOf(false) }
-    val fundingOptions = listOf("SOL", "SKR")
+    val fundingOptions = listOf("SOL", "USDC")
+    val activeAllowlist = allowlistTokens.filter { it != fundingAsset }
 
     Column(
         modifier = Modifier
@@ -58,53 +55,57 @@ fun SessionConfigScreen(
             color = MatrixMagenta
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "Cycles: $transactionCount",
+            text = "Total transactions (even): $totalTransactions",
             style = MaterialTheme.typography.bodyLarge,
             color = MatrixGreen
         )
 
         Slider(
-            value = transactionCount.toFloat(),
-            onValueChange = { transactionCount = it.toInt() },
-            valueRange = 1f..50f,
-            steps = 49,
+            value = totalTransactions.toFloat(),
+            onValueChange = {
+                val rounded = it.toInt().coerceIn(2, 100)
+                totalTransactions = if (rounded % 2 == 0) rounded else rounded + 1
+            },
+            valueRange = 2f..100f,
+            steps = 48,
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
-        Text("Select curated tokens (comma separated)")
+        Spacer(modifier = Modifier.height(12.dp))
+
         OutlinedTextField(
-            value = curatedTokens.joinToString(","),
-            onValueChange = { curatedTokens = it.split(",").map { token -> token.trim() }.filter { token -> token.isNotBlank() } },
+            value = sessionAmountText,
+            onValueChange = { sessionAmountText = it },
+            label = { Text("Session amount") },
             modifier = Modifier.fillMaxWidth()
         )
 
         Spacer(modifier = Modifier.height(16.dp))
         Text("Funding asset")
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = !expanded }
-        ) {
-            TextField(
+
+        Box(modifier = Modifier.fillMaxWidth()) {
+            OutlinedTextField(
                 value = fundingAsset,
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("Asset") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                modifier = Modifier.menuAnchor().fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = true },
+                label = { Text("Asset") }
             )
-            ExposedDropdownMenu(
+
+            DropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { expanded = false }
             ) {
-                fundingOptions.forEach { selectionOption ->
+                fundingOptions.forEach { option ->
                     DropdownMenuItem(
-                        text = { Text(selectionOption) },
+                        text = { Text(option) },
                         onClick = {
-                            fundingAsset = selectionOption
+                            fundingAsset = option
                             expanded = false
                         }
                     )
@@ -112,25 +113,29 @@ fun SessionConfigScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Cycler allowlist: ${activeAllowlist.joinToString(", ")}",
+            color = MatrixGreen,
+            style = MaterialTheme.typography.bodyMedium
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
         CyberButton(
             onClick = {
+                val amount = sessionAmountText.toDoubleOrNull() ?: 0.0
                 onStartSession(
                     SessionViewModel.SessionConfig(
-                        transactionCount = transactionCount,
-                        bundlerRatio = bundlerRatio,
-                        curatedTokens = curatedTokens,
+                        totalTransactions = totalTransactions,
+                        sessionAmount = amount,
                         fundingAsset = fundingAsset
                     )
                 )
             }
         ) {
-            Text("[ START SESSION ]")
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        CyberButton(onClick = onViewLeaderboard) {
-            Text("VIEW LEADERBOARD")
+            Text("[ START CYCLER SESSION ]")
         }
     }
 }

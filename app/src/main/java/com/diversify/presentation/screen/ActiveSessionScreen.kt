@@ -15,8 +15,7 @@ fun ActiveSessionScreen(
     progress: Int,
     total: Int,
     isSigning: Boolean,
-    onAnswerSubmit: (String) -> Unit,
-    onSkipTransaction: () -> Unit
+    onAnswerSubmit: (String) -> Unit
 ) {
     var answer by remember { mutableStateOf("") }
     
@@ -67,15 +66,6 @@ fun ActiveSessionScreen(
                 } else {
                     Text("APPROVE TRANSACTION")
                 }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            CyberButton(
-                onClick = onSkipTransaction,
-                enabled = !isSigning
-            ) {
-                Text("SKIP TRANSACTION")
             }
         }
     }

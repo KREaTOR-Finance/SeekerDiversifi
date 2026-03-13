@@ -1,6 +1,8 @@
 package com.diversify.solana.rpc
 
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import org.json.JSONArray
+import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,10 +23,10 @@ class SolanaRpcClient @Inject constructor() {
 
     private suspend fun rpcCall(
         method: String,
-        params: org.json.JSONArray = org.json.JSONArray()
-    ): Result<org.json.JSONObject> {
+        params: JSONArray = JSONArray()
+    ): Result<JSONObject> {
         return try {
-            val payload = org.json.JSONObject()
+            val payload = JSONObject()
                 .put("jsonrpc", "2.0")
                 .put("id", 1)
                 .put("method", method)
@@ -36,7 +38,7 @@ class SolanaRpcClient @Inject constructor() {
                 return Result.failure(Exception("RPC error ${resp.code}"))
             }
             val body = resp.body?.string() ?: ""
-            val resultObj = org.json.JSONObject(body)
+            val resultObj = JSONObject(body)
             if (resultObj.has("error")) {
                 val err = resultObj.getJSONObject("error")
                 return Result.failure(Exception(err.toString()))
@@ -48,18 +50,18 @@ class SolanaRpcClient @Inject constructor() {
     }
 
     suspend fun getBalance(publicKey: String): Result<Long> {
-        return rpcCall("getBalance", org.json.JSONArray().put(publicKey))
+        return rpcCall("getBalance", JSONArray().put(publicKey))
             .mapCatching { it.getLong("value") }
     }
 
     suspend fun sendTransaction(transaction: ByteArray): Result<String> {
         val encoded = android.util.Base64.encodeToString(transaction, android.util.Base64.NO_WRAP)
-        return rpcCall("sendTransaction", org.json.JSONArray().put(encoded))
+        return rpcCall("sendTransaction", JSONArray().put(encoded))
             .mapCatching { it.getString("result") }
     }
 
     suspend fun getTransactionStatus(signature: String): Result<TransactionStatus> {
-        return rpcCall("getSignatureStatuses", org.json.JSONArray().put(org.json.JSONArray().put(signature)))
+        return rpcCall("getSignatureStatuses", JSONArray().put(JSONArray().put(signature)))
             .mapCatching { obj ->
                 val array = obj.getJSONArray("value")
                 if (array.isNull(0)) {
@@ -79,6 +81,28 @@ class SolanaRpcClient @Inject constructor() {
     suspend fun getRecentBlockhash(): Result<String> {
         return rpcCall("getLatestBlockhash")
             .mapCatching { it.getJSONObject("value").getString("blockhash") }
+    }
+
+    suspend fun getTokenBalanceBaseUnits(ownerPublicKey: String, mint: String): Result<Long> {
+        val params = JSONArray()
+            .put(ownerPublicKey)
+            .put(JSONObject().put("mint", mint))
+            .put(JSONObject().put("encoding", "jsonParsed"))
+        return rpcCall("getTokenAccountsByOwner", params).mapCatching { result ->
+            val value = result.getJSONArray("value")
+            var total = 0L
+            for (i in 0 until value.length()) {
+                val amount = value.getJSONObject(i)
+                    .getJSONObject("account")
+                    .getJSONObject("data")
+                    .getJSONObject("parsed")
+                    .getJSONObject("info")
+                    .getJSONObject("tokenAmount")
+                    .optString("amount", "0")
+                total += amount.toLongOrNull() ?: 0L
+            }
+            total
+        }
     }
 
     enum class TransactionStatus {

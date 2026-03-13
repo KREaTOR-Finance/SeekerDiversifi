@@ -6,6 +6,9 @@ plugins {
 }
 
 android {
+    def jupApiKey = (project.findProperty("JUP_API_KEY") ?: System.getenv("JUP_API_KEY") ?: "").toString()
+    def escapedJupApiKey = jupApiKey.replace("\\", "\\\\").replace("\"", "\\\"")
+
     namespace 'com.diversify.app'
     compileSdk 34
 
@@ -15,8 +18,9 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0.0"
-        // buildConfigField "String", "BACKEND_URL", '"https://your-backend.vercel.app/api"' // backend offline, kept for future use
-        buildConfigField "String", "SOLANA_RPC_URL", '"https://api.mainnet-beta.solana.com"' // mainnet RPC endpoint
+        buildConfigField "String", "SOLANA_RPC_URL", '"https://api.mainnet-beta.solana.com"'
+        buildConfigField "String", "SOLANA_CLUSTER", '"mainnet-beta"'
+        buildConfigField "String", "JUP_API_KEY", "\"${escapedJupApiKey}\""
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -31,7 +35,6 @@ android {
         }
     }
 
-    // custom APK name
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
             def newName = "SeekerDIVERSIFI-${variant.versionName}.apk"
@@ -49,17 +52,28 @@ android {
     }
     
     buildFeatures {
+        buildConfig true
         compose true
     }
     
     composeOptions {
-        kotlinCompilerExtensionVersion '1.5.3'
+        kotlinCompilerExtensionVersion '1.5.14'
     }
     
     packagingOptions {
         resources {
             excludes += '/META-INF/{AL2.0,LGPL2.1}'
         }
+    }
+}
+
+configurations.configureEach {
+    resolutionStrategy {
+        force 'androidx.core:core:1.12.0'
+        force 'androidx.core:core-ktx:1.12.0'
+        force 'androidx.activity:activity:1.8.0'
+        force 'androidx.activity:activity-ktx:1.8.0'
+        force 'androidx.activity:activity-compose:1.8.0'
     }
 }
 
@@ -76,11 +90,6 @@ dependencies {
     implementation 'androidx.compose.ui:ui-tooling-preview'
     implementation 'androidx.compose.material3:material3'
     
-    // Room Database
-    implementation 'androidx.room:room-runtime:2.6.0'
-    implementation 'androidx.room:room-ktx:2.6.0'
-    kapt 'androidx.room:room-compiler:2.6.0'
-    
     // Hilt DI
     implementation 'com.google.dagger:hilt-android:2.48'
     kapt 'com.google.dagger:hilt-compiler:2.48'
@@ -89,15 +98,9 @@ dependencies {
     // Security
     implementation 'androidx.security:security-crypto:1.1.0-alpha06'
     
-    // Solana Mobile Wallet Adapter
-    implementation 'com.solanamobile:mobile-wallet-adapter-clientlib-ktx:2.1.0'
-    // OkHttp used for network calls (e.g. mainnet RPC); keep if you still need internet access
+    implementation 'com.solanamobile:mobile-wallet-adapter-clientlib-ktx:2.0.0'
     implementation 'com.squareup.okhttp3:okhttp:4.10.0'
-    // Solana client for transaction/keys
-    implementation 'com.solana:solana:1.5.0'
-    // needed for cryptography during key derivation
-    implementation 'org.bouncycastle:bcprov-jdk15on:1.70'
-    implementation 'org.json:json:20230227' // simple JSON parsing
+    implementation 'org.json:json:20230227'
     
     // Testing
     testImplementation 'junit:junit:4.13.2'

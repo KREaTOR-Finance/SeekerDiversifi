@@ -2,10 +2,12 @@ package com.diversify.presentation.component
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -20,43 +22,44 @@ fun MatrixRain(
     backgroundColor: Color = Color(0xFF0A0A0A)
 ) {
     val configuration = LocalConfiguration.current
-    val screenWidth = configuration.screenWidthDp.dp
-    val screenHeight = configuration.screenHeightDp.dp
-    
+    val screenWidthDp = configuration.screenWidthDp.dp
+    val screenHeightDp = configuration.screenHeightDp.dp
+
     val density = LocalDensity.current
-    val fontSize = with(density) { 14.dp.toPx() }
-    
-    val columns = (screenWidth.value * intensity / fontSize).toInt().coerceAtLeast(20)
-    
-    val drops = remember { 
-        MutableList(columns) { 
+    val fontSizePx = with(density) { 14.dp.toPx() }
+    val screenHeightPx = with(density) { screenHeightDp.toPx() }
+
+    val columns = (screenWidthDp.value * intensity / (fontSizePx / density.density)).toInt().coerceAtLeast(20)
+
+    val drops = remember {
+        MutableList(columns) {
             Drop(
-                x = it * fontSize,
-                y = Random.nextFloat() * -screenHeight.value,
+                x = it * fontSizePx,
+                y = Random.nextFloat() * -screenHeightPx,
                 speed = Random.nextFloat() * 8 + 4,
                 chars = generateCharSequence()
             )
         }
     }
-    
+
     LaunchedEffect(Unit) {
         while (true) {
             delay(50L)
             drops.forEach { drop ->
                 drop.y += drop.speed
-                
-                if (drop.y > screenHeight.value + 100) {
-                    drop.y = -Random.nextFloat() * 100
+
+                if (drop.y > screenHeightPx + 100f) {
+                    drop.y = -Random.nextFloat() * 100f
                     drop.speed = Random.nextFloat() * 8 + 4
                     drop.chars = generateCharSequence()
                 }
             }
         }
     }
-    
+
     Canvas(modifier = modifier.fillMaxSize()) {
         drawRect(backgroundColor)
-        
+
         drops.forEach { drop ->
             drawContext.canvas.nativeCanvas.drawText(
                 drop.chars.currentChar.toString(),
@@ -64,23 +67,23 @@ fun MatrixRain(
                 drop.y,
                 android.graphics.Paint().apply {
                     this.color = android.graphics.Color.parseColor(color.toHexString())
-                    textSize = fontSize
+                    textSize = fontSizePx
                     typeface = android.graphics.Typeface.MONOSPACE
                 }
             )
-            
+
             val trailLength = 5
             for (i in 1..trailLength) {
                 val alpha = 1.0f - (i.toFloat() / trailLength)
                 drawContext.canvas.nativeCanvas.drawText(
                     drop.chars.getTrailChar(i).toString(),
                     drop.x,
-                    drop.y - (i * fontSize * 1.5f),
+                    drop.y - (i * fontSizePx * 1.5f),
                     android.graphics.Paint().apply {
                         this.color = android.graphics.Color.parseColor(
                             color.copy(alpha = alpha * 0.5f).toHexString()
                         )
-                        textSize = fontSize
+                        textSize = fontSizePx
                         typeface = android.graphics.Typeface.MONOSPACE
                     }
                 )
@@ -90,7 +93,7 @@ fun MatrixRain(
 }
 
 private fun generateCharSequence(): CharSequence {
-    val chars = "01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン"
+    val chars = "01ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     return CharSequence(
         currentChar = chars[Random.nextInt(chars.length)],
         trailChars = List(5) { chars[Random.nextInt(chars.length)] }

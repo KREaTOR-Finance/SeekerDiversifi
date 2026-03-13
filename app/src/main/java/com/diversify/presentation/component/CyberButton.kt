@@ -1,16 +1,28 @@
 package com.diversify.presentation.component
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RectangleShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.unit.dp
-import com.diversify.presentation.theme.MatrixGreen
 import com.diversify.presentation.theme.MatrixBlack
+import com.diversify.presentation.theme.MatrixGreen
 import kotlinx.coroutines.delay
 
 @Composable
@@ -22,7 +34,7 @@ fun CyberButton(
     content: @Composable RowScope.() -> Unit
 ) {
     var glitchOffset by remember { mutableStateOf(0f) }
-    
+
     LaunchedEffect(glitch) {
         if (glitch) {
             glitchOffset = 2f
@@ -34,7 +46,7 @@ fun CyberButton(
             glitchOffset = 0f
         }
     }
-    
+
     Button(
         onClick = onClick,
         enabled = enabled,
@@ -54,48 +66,11 @@ fun CyberButton(
         ) {
             Row(
                 horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-                content = content
-            )
-        }
-        
-        Text(
-            text = "◄",
-            modifier = Modifier.padding(end = 4.dp),
-            color = MatrixGreen
-        )
-        
-        Row(content = content)
-        
-        Text(
-            text = "►",
-            modifier = Modifier.padding(start = 4.dp),
-            color = MatrixGreen
-        )
-        
-        if (glitch) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .offset(x = 2.dp, y = (-2).dp)
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                    content = content
-                )
-            }
-            
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .offset(x = (-2).dp, y = 2.dp)
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                    content = content
-                )
+                Text(text = "<", modifier = Modifier.padding(end = 4.dp), color = MatrixGreen)
+                content()
+                Text(text = ">", modifier = Modifier.padding(start = 4.dp), color = MatrixGreen)
             }
         }
     }
@@ -119,8 +94,8 @@ fun CyberOutlinedButton(
         ),
         border = BorderStroke(1.dp, MatrixGreen)
     ) {
-        Text("◄", modifier = Modifier.padding(end = 4.dp))
-        Row(content = content)
-        Text("►", modifier = Modifier.padding(start = 4.dp))
+        Text("<", modifier = Modifier.padding(end = 4.dp))
+        content()
+        Text(">", modifier = Modifier.padding(start = 4.dp))
     }
 }

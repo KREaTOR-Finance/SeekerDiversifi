@@ -5,92 +5,109 @@ import com.diversify.domain.model.PuzzleDifficulty
 import com.diversify.domain.model.PuzzleType
 import com.diversify.domain.model.Transaction
 import com.diversify.domain.model.TransactionType
-import com.diversify.solana.wallet.CyclerWalletManager
 import java.util.UUID
 import javax.inject.Inject
 import kotlin.random.Random
 
-class GenerateTransactionBatchUseCase @Inject constructor(
-    private val cyclerWalletManager: CyclerWalletManager
-) {
+class GenerateTransactionBatchUseCase @Inject constructor() {
 
-    private val random = Random(System.currentTimeMillis())
+    private var random = Random(System.currentTimeMillis())
+
+    internal constructor(random: Random) : this() {
+        this.random = random
+    }
 
     suspend operator fun invoke(
-        count: Int,
-        bundlerRatio: Float,
-        curatedTokens: List<String>,
+        totalTransactions: Int,
+        sessionAmount: Double,
+        allowlistTokens: List<String>,
         fundingAsset: String
     ): List<Transaction> {
+        val sanitized = allowlistTokens
+            .map { it.trim().uppercase() }
+            .filter { it.isNotBlank() && it != fundingAsset.uppercase() }
+            .distinct()
 
-        if (count <= 0) return emptyList()
+        require(totalTransactions >= 2) { "Total transactions must be at least 2." }
+        require(totalTransactions % 2 == 0) { "Total transactions must be even." }
+        require(sessionAmount > 0.0) { "Session amount must be greater than zero." }
+        require(sanitized.isNotEmpty()) { "Allowlist cannot be empty after filtering funding asset." }
 
-        val transactions = mutableListOf<Transaction>()
-        val tradeAmount = 0.01
+        val totalBuys = totalTransactions / 2
+        val amountPerBuy = sessionAmount / totalBuys.toDouble()
+        val shuffledTokens = sanitized.shuffled(random)
 
-        repeat(count) { cycle ->
-            val token = curatedTokens.shuffled().firstOrNull() ?: "SOL"
+        val transactions = ArrayList<Transaction>(totalTransactions)
+        val heldLots = mutableListOf<String>()
+        var buysRemaining = totalBuys
+        var sellsRemaining = totalBuys
+        var tokenCursor = 0
+        var lastBoughtToken: String? = null
 
-            transactions.add(
-                Transaction(
-                    id = UUID.randomUUID().toString(),
-                    sessionId = "",
-                    type = TransactionType.CYCLER_TRADE_BUY,
-                    amount = tradeAmount,
-                    destinationWallet = null,
-                    token = token,
-                    puzzle = generateMathPuzzle(PuzzleDifficulty.MEDIUM),
-                    rawData = buildSwapTransaction("SOL", token, tradeAmount),
-                    status = com.diversify.domain.model.TransactionStatus.PENDING,
-                    signature = null,
-                    puzzleSolved = false,
-                    puzzleTimeMs = 0L,
-                    createdAt = System.currentTimeMillis(),
-                    confirmedAt = null
+        repeat(totalTransactions) {
+            val nextType = when {
+                heldLots.isEmpty() -> TransactionType.BUY
+                buysRemaining == 0 -> TransactionType.SELL
+                sellsRemaining == 0 -> TransactionType.BUY
+                random.nextBoolean() -> TransactionType.BUY
+                else -> TransactionType.SELL
+            }
+
+            if (nextType == TransactionType.BUY) {
+                val token = shuffledTokens[tokenCursor % shuffledTokens.size]
+                tokenCursor++
+                buysRemaining--
+                heldLots.add(token)
+                lastBoughtToken = token
+
+                transactions.add(
+                    Transaction(
+                        id = UUID.randomUUID().toString(),
+                        sessionId = "",
+                        type = TransactionType.BUY,
+                        amount = amountPerBuy,
+                        token = token,
+                        puzzle = generateMathPuzzle(PuzzleDifficulty.MEDIUM),
+                        rawData = byteArrayOf(),
+                        status = com.diversify.domain.model.TransactionStatus.PENDING,
+                        signature = null,
+                        createdAt = System.currentTimeMillis(),
+                        confirmedAt = null
+                    )
                 )
-            )
+            } else {
+                val distinctHeld = heldLots.distinct()
+                val sellCandidates =
+                    if (distinctHeld.size > 1 && lastBoughtToken != null) distinctHeld.filter { it != lastBoughtToken }
+                    else distinctHeld
+                val sellToken = sellCandidates[random.nextInt(sellCandidates.size)]
+                val lotIndex = heldLots.indexOfFirst { it == sellToken }
+                if (lotIndex >= 0) {
+                    heldLots.removeAt(lotIndex)
+                }
+                sellsRemaining--
 
-            val dummyIndex = cycle % 50
-            val dummyWallet = cyclerWalletManager.getOrCreateWallet(dummyIndex)
-            transactions.add(
-                Transaction(
-                    id = UUID.randomUUID().toString(),
-                    sessionId = "",
-                    type = TransactionType.BUNDLER_TRANSFER,
-                    amount = tradeAmount,
-                    destinationWallet = dummyWallet.publicKey,
-                    token = if (fundingAsset == "SKR") "SKR" else null,
-                    puzzle = generateMathPuzzle(PuzzleDifficulty.MEDIUM),
-                    rawData = buildTransferTransaction(dummyWallet.publicKey, tradeAmount),
-                    status = com.diversify.domain.model.TransactionStatus.PENDING,
-                    signature = null,
-                    puzzleSolved = false,
-                    puzzleTimeMs = 0L,
-                    createdAt = System.currentTimeMillis(),
-                    confirmedAt = null,
-                    metadata = mapOf("walletIndex" to dummyIndex.toString())
+                transactions.add(
+                    Transaction(
+                        id = UUID.randomUUID().toString(),
+                        sessionId = "",
+                        type = TransactionType.SELL,
+                        amount = 0.0,
+                        token = sellToken,
+                        puzzle = generateMathPuzzle(PuzzleDifficulty.MEDIUM),
+                        rawData = byteArrayOf(),
+                        status = com.diversify.domain.model.TransactionStatus.PENDING,
+                        signature = null,
+                        createdAt = System.currentTimeMillis(),
+                        confirmedAt = null
+                    )
                 )
-            )
-
-            transactions.add(
-                Transaction(
-                    id = UUID.randomUUID().toString(),
-                    sessionId = "",
-                    type = TransactionType.CYCLER_TRADE_SELL,
-                    amount = tradeAmount,
-                    destinationWallet = null,
-                    token = token,
-                    puzzle = generateMathPuzzle(PuzzleDifficulty.MEDIUM),
-                    rawData = buildSwapTransaction(token, "SKR", tradeAmount),
-                    status = com.diversify.domain.model.TransactionStatus.PENDING,
-                    signature = null,
-                    puzzleSolved = false,
-                    puzzleTimeMs = 0L,
-                    createdAt = System.currentTimeMillis(),
-                    confirmedAt = null
-                )
-            )
+            }
         }
+
+        check(buysRemaining == 0) { "Planner ended with buys remaining." }
+        check(sellsRemaining == 0) { "Planner ended with sells remaining." }
+        check(heldLots.isEmpty()) { "Planner ended with non-zero holdings." }
 
         return transactions
     }
@@ -131,13 +148,5 @@ class GenerateTransactionBatchUseCase @Inject constructor(
                 )
             }
         }
-    }
-
-    private fun buildTransferTransaction(to: String, amount: Double): ByteArray {
-        return "transfer_${to}_${amount}".toByteArray()
-    }
-
-    private fun buildSwapTransaction(fromToken: String, toToken: String, amount: Double): ByteArray {
-        return "swap_${fromToken}_${toToken}_${amount}".toByteArray()
     }
 }
