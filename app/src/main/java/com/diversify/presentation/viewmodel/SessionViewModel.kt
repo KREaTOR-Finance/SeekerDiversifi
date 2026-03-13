@@ -312,8 +312,9 @@ class SessionViewModel @Inject constructor(
         fundingAsset: String,
         sessionAmount: Double
     ): String? {
-        val solBalance = rpcClient.getBalance(publicKey).getOrElse {
-            return "Unable to read SOL balance from RPC."
+        val solBalance = rpcClient.getBalance(publicKey).getOrElse { error ->
+            val reason = error.message ?: "network error"
+            return "Unable to read SOL balance from mainnet RPC. $reason"
         }
 
         if (solBalance < SOL_FEE_RESERVE_LAMPORTS) {
@@ -333,8 +334,9 @@ class SessionViewModel @Inject constructor(
             ?: return "Unsupported funding mint."
         val requiredFundingUnits = toBaseUnits(fundingAsset, sessionAmount)
             ?: return "Invalid funding amount for $fundingAsset."
-        val fundingBalance = rpcClient.getTokenBalanceBaseUnits(publicKey, fundingMint).getOrElse {
-            return "Unable to read $fundingAsset balance from RPC."
+        val fundingBalance = rpcClient.getTokenBalanceBaseUnits(publicKey, fundingMint).getOrElse { error ->
+            val reason = error.message ?: "network error"
+            return "Unable to read $fundingAsset balance from mainnet RPC. $reason"
         }
         if (fundingBalance < requiredFundingUnits) {
             return "Insufficient $fundingAsset balance for selected session amount."
