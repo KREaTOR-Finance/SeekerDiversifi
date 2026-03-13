@@ -5,7 +5,7 @@ import com.diversify.core.util.Base58
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.IOException
 import javax.inject.Inject
@@ -50,10 +50,8 @@ class JupiterClient @Inject constructor() {
                 .put("dynamicSlippage", true)
                 .put("asLegacyTransaction", true)
 
-            val swapBody = RequestBody.create(
-                "application/json".toMediaTypeOrNull(),
-                swapBodyJson.toString()
-            )
+            val swapBody = swapBodyJson.toString()
+                .toRequestBody("application/json".toMediaTypeOrNull())
             val swapRequest = withAuthHeaders(Request.Builder())
                 .url(swapUrl)
                 .post(swapBody)

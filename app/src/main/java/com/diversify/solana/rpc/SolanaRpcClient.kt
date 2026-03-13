@@ -1,6 +1,7 @@
 package com.diversify.solana.rpc
 
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import javax.inject.Inject
@@ -12,9 +13,7 @@ class SolanaRpcClient @Inject constructor() {
     private val rpcUrl: String = com.diversify.app.BuildConfig.SOLANA_RPC_URL
 
     private fun buildRequest(json: String): okhttp3.Request {
-        val body = okhttp3.RequestBody.create(
-            "application/json".toMediaTypeOrNull(), json
-        )
+        val body = json.toRequestBody("application/json".toMediaTypeOrNull())
         return okhttp3.Request.Builder()
             .url(rpcUrl)
             .post(body)
