@@ -7,11 +7,18 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.io.IOException
+import java.io.InterruptedIOException
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLException
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 @Singleton
 class SolanaRpcClient @Inject constructor() {
@@ -40,7 +47,7 @@ class SolanaRpcClient @Inject constructor() {
     private suspend fun rpcCall(
         method: String,
         params: JSONArray = JSONArray()
-    ): Result<Any> {
+    ): Result<Any> = withContext(Dispatchers.IO) {
         val payload = JSONObject()
             .put("jsonrpc", "2.0")
             .put("id", 1)
@@ -56,13 +63,13 @@ class SolanaRpcClient @Inject constructor() {
                 attempt++
                 val callResult = runCatching { executeRpc(endpoint, payload) }
                 if (callResult.isSuccess) {
-                    return Result.success(callResult.getOrThrow())
+                    return@withContext Result.success(callResult.getOrThrow())
                 }
 
-                val message = callResult.exceptionOrNull()?.message ?: "Unknown RPC failure."
-                errors += "$endpoint attempt $attempt: $message"
+                val throwable = callResult.exceptionOrNull()
+                errors += "$endpoint attempt $attempt: ${formatFailure(throwable)}"
 
-                if (!isRetriable(message) || attempt >= MAX_ATTEMPTS_PER_ENDPOINT) {
+                if (throwable == null || !isRetriable(throwable) || attempt >= MAX_ATTEMPTS_PER_ENDPOINT) {
                     break
                 }
                 delay(RETRY_DELAY_MS)
@@ -70,7 +77,7 @@ class SolanaRpcClient @Inject constructor() {
         }
 
         val summary = errors.lastOrNull() ?: "Unknown error."
-        return Result.failure(IOException("Mainnet RPC unavailable across fallback endpoints. $summary"))
+        Result.failure(IOException("Mainnet RPC unavailable across fallback endpoints. $summary"))
     }
 
     private fun executeRpc(endpoint: String, payload: String): Any {
@@ -97,8 +104,16 @@ class SolanaRpcClient @Inject constructor() {
         }
     }
 
-    private fun isRetriable(message: String): Boolean {
-        val m = message.lowercase()
+    private fun isRetriable(error: Throwable): Boolean {
+        if (error is SocketTimeoutException ||
+            error is InterruptedIOException ||
+            error is UnknownHostException ||
+            error is ConnectException ||
+            error is SSLException
+        ) {
+            return true
+        }
+        val m = (error.message ?: "").lowercase()
         return m.contains("timeout") ||
             m.contains("timed out") ||
             m.contains("failed to connect") ||
@@ -109,6 +124,13 @@ class SolanaRpcClient @Inject constructor() {
             m.contains("http 503") ||
             m.contains("http 504") ||
             m.contains("-32005")
+    }
+
+    private fun formatFailure(error: Throwable?): String {
+        if (error == null) return "Unknown RPC failure."
+        val type = error::class.java.simpleName.ifBlank { "Exception" }
+        val message = error.message?.trim().orEmpty()
+        return if (message.isBlank()) type else "$type: $message"
     }
 
     private fun requireObject(result: Any, method: String): JSONObject {
@@ -151,19 +173,19 @@ class SolanaRpcClient @Inject constructor() {
             .put(JSONObject().put("searchTransactionHistory", true))
         return rpcCall("getSignatureStatuses", params).mapCatching { result ->
             val obj = requireObject(result, "getSignatureStatuses")
-                val array = obj.getJSONArray("value")
-                if (array.isNull(0)) {
-                    TransactionStatus.NOT_FOUND
-                } else {
-                    val status = array.getJSONObject(0)
-                    val confirmation = status.optString("confirmationStatus", "")
-                    when {
-                        status.has("err") && !status.isNull("err") -> TransactionStatus.FAILED
-                        confirmation == "confirmed" || confirmation == "finalized" -> TransactionStatus.CONFIRMED
-                        else -> TransactionStatus.PENDING
-                    }
+            val array = obj.getJSONArray("value")
+            if (array.isNull(0)) {
+                TransactionStatus.NOT_FOUND
+            } else {
+                val status = array.getJSONObject(0)
+                val confirmation = status.optString("confirmationStatus", "")
+                when {
+                    status.has("err") && !status.isNull("err") -> TransactionStatus.FAILED
+                    confirmation == "confirmed" || confirmation == "finalized" -> TransactionStatus.CONFIRMED
+                    else -> TransactionStatus.PENDING
                 }
             }
+        }
     }
 
     suspend fun getRecentBlockhash(): Result<String> {

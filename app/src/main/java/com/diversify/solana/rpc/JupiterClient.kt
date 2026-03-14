@@ -10,6 +10,8 @@ import org.json.JSONObject
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Singleton
 class JupiterClient @Inject constructor() {
@@ -23,66 +25,68 @@ class JupiterClient @Inject constructor() {
         amountLamports: Long,
         userPubkey: String
     ): Result<ByteArray> {
-        return try {
-            val quoteRequest = buildQuoteRequest(inputMint, outputMint, amountLamports)
-            val quoteJson = client.newCall(quoteRequest).execute().use { quoteResponse ->
-                if (!quoteResponse.isSuccessful) {
-                    return Result.failure(IOException("Jupiter quote error ${quoteResponse.code}"))
+        return withContext(Dispatchers.IO) {
+            try {
+                val quoteRequest = buildQuoteRequest(inputMint, outputMint, amountLamports)
+                val quoteJson = client.newCall(quoteRequest).execute().use { quoteResponse ->
+                    if (!quoteResponse.isSuccessful) {
+                        return@withContext Result.failure(IOException("Jupiter quote error ${quoteResponse.code}"))
+                    }
+                    val quoteBody = quoteResponse.body?.string() ?: ""
+                    val parsed = JSONObject(quoteBody)
+                    if (parsed.has("error")) {
+                        return@withContext Result.failure(IOException(parsed.optString("error", "Jupiter quote failure")))
+                    }
+                    validateQuoteInvariant(
+                        quoteJson = parsed,
+                        expectedInputMint = inputMint,
+                        expectedOutputMint = outputMint,
+                        expectedAmountLamports = amountLamports
+                    ).onFailure { return@withContext Result.failure(it) }
+                    parsed
                 }
-                val quoteBody = quoteResponse.body?.string() ?: ""
-                val parsed = JSONObject(quoteBody)
-                if (parsed.has("error")) {
-                    return Result.failure(IOException(parsed.optString("error", "Jupiter quote failure")))
+
+                val swapBodyJson = JSONObject()
+                    .put("quoteResponse", quoteJson)
+                    .put("userPublicKey", userPubkey)
+                    .put("dynamicComputeUnitLimit", true)
+                    .put("dynamicSlippage", true)
+                    .put("asLegacyTransaction", true)
+
+                val swapBody = swapBodyJson.toString()
+                    .toRequestBody("application/json".toMediaTypeOrNull())
+                val swapRequest = withAuthHeaders(Request.Builder())
+                    .url(swapUrl)
+                    .post(swapBody)
+                    .build()
+
+                val swapTx = client.newCall(swapRequest).execute().use { swapResponse ->
+                    if (!swapResponse.isSuccessful) {
+                        return@withContext Result.failure(IOException("Jupiter swap error ${swapResponse.code}"))
+                    }
+
+                    val swapResponseBody = swapResponse.body?.string() ?: ""
+                    val swapJson = JSONObject(swapResponseBody)
+                    if (swapJson.has("error")) {
+                        return@withContext Result.failure(IOException(swapJson.optString("error", "Jupiter swap failure")))
+                    }
+                    validateSwapInvariant(
+                        swapJson = swapJson,
+                        expectedUserPubkey = userPubkey,
+                        expectedInputMint = inputMint,
+                        expectedAmountLamports = amountLamports
+                    ).onFailure { return@withContext Result.failure(it) }
+                    swapJson.getString("swapTransaction")
                 }
-                validateQuoteInvariant(
-                    quoteJson = parsed,
-                    expectedInputMint = inputMint,
-                    expectedOutputMint = outputMint,
-                    expectedAmountLamports = amountLamports
-                ).onFailure { return Result.failure(it) }
-                parsed
+
+                val bytes = android.util.Base64.decode(swapTx, android.util.Base64.DEFAULT)
+                if (bytes.isEmpty()) {
+                    return@withContext Result.failure(IOException("Jupiter swap payload was empty."))
+                }
+                Result.success(bytes)
+            } catch (e: Exception) {
+                Result.failure(e)
             }
-
-            val swapBodyJson = JSONObject()
-                .put("quoteResponse", quoteJson)
-                .put("userPublicKey", userPubkey)
-                .put("dynamicComputeUnitLimit", true)
-                .put("dynamicSlippage", true)
-                .put("asLegacyTransaction", true)
-
-            val swapBody = swapBodyJson.toString()
-                .toRequestBody("application/json".toMediaTypeOrNull())
-            val swapRequest = withAuthHeaders(Request.Builder())
-                .url(swapUrl)
-                .post(swapBody)
-                .build()
-
-            val swapTx = client.newCall(swapRequest).execute().use { swapResponse ->
-                if (!swapResponse.isSuccessful) {
-                    return Result.failure(IOException("Jupiter swap error ${swapResponse.code}"))
-                }
-
-                val swapResponseBody = swapResponse.body?.string() ?: ""
-                val swapJson = JSONObject(swapResponseBody)
-                if (swapJson.has("error")) {
-                    return Result.failure(IOException(swapJson.optString("error", "Jupiter swap failure")))
-                }
-                validateSwapInvariant(
-                    swapJson = swapJson,
-                    expectedUserPubkey = userPubkey,
-                    expectedInputMint = inputMint,
-                    expectedAmountLamports = amountLamports
-                ).onFailure { return Result.failure(it) }
-                swapJson.getString("swapTransaction")
-            }
-
-            val bytes = android.util.Base64.decode(swapTx, android.util.Base64.DEFAULT)
-            if (bytes.isEmpty()) {
-                return Result.failure(IOException("Jupiter swap payload was empty."))
-            }
-            Result.success(bytes)
-        } catch (e: Exception) {
-            Result.failure(e)
         }
     }
 
